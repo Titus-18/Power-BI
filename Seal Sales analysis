@@ -1,74 +1,33 @@
-/*select * from  OWTR T0 */
-Declare DateF timestamp;
-Declare DateT timestamp;
-DateF := /* T0."DocDate" */ '[%0]';
-DateT := /* T0."DocDate" */ '[%1]';
+-- Extract Sales Data from SAP (Manufacturing Use Case)
 
+SELECT 
+    vbak.VBELN AS Sales_Order_Number,
+    vbak.ERDAT AS Order_Date,
+    vbak.VKORG AS Sales_Organization,
+    
+    vbap.POSNR AS Item_Number,
+    vbap.MATNR AS Material_Code,
+    mara.MAKTX AS Material_Description,
+    
+    vbap.KWMENG AS Order_Quantity,
+    vbap.NETWR AS Net_Value,
+    
+    kna1.KUNNR AS Customer_Code,
+    kna1.NAME1 AS Customer_Name,
+    kna1.LAND1 AS Country
 
-Select distinct "INV No","OrderType","InvoiceDate","CardCode","CardName" as "Name","Branch",
-CASE WHEN "BPGroupName" in ('Sundry Debtors Sale','.Customers' ) THEN "CardName" else "BPGroupName" end as "BPGroupName",
-"ItemCode","Dscription","Quantity","HSN","Material Type","ItemGroup Name"
-,"U_Model", "U_Sizes",
+FROM VBAK vbak
 
+INNER JOIN VBAP vbap 
+    ON vbak.VBELN = vbap.VBELN
 
-sum("BaseSum")"Base Amt",SUM("CGST Amount")"CGST",SUM("SGST Amount")"SGST",SUM("IGST Amount")"IGST",
-(sum("BaseSum")+ ifnull(SUM("CGST Amount"),0)+ifnull(SUM("SGST Amount"),0)+ifnull(SUM("IGST Amount"),0)) as "DocTotal"
-from ( 
-SELECT DISTINCT T0."DocNum" as "INV No",T0."U_OrderType"as "OrderType",T0."DocEntry",T0."DocDate" as "InvoiceDate",
-T0."CardCode",T0."CardName",(select "OcrName" from oocr where "OcrCode" = t1."OcrCode" ) as "Branch",
-(SELECT "GroupName" FROM OCRG a inner join ocrd b on a."GroupCode"=b."GroupCode" 
-where T0."CardCode" = b."CardCode")as "BPGroupName",T3."BpGSTN",T0."U_CustPoNo",T1."ItemCode",T1."Dscription",
-"Quantity",(select "ItmsGrpNam" from oitb where "ItmsGrpCod" = t4."ItmsGrpCod") "ItemGroup Name",
-t4."U_MatType" "Material Type",
-(select "ChapterID" from OCHP where "AbsEntry"="HsnEntry") "HSN",
-(select "ServCode" from OSAC where "AbsEntry"="SacEntry") "SAC",
-"LineNum",(T1."LineTotal") as "BaseSum",
-(select "Rate" from OSTC a where T1."TaxCode" = a."Code") "Tax Rate",
-(select sum(T2."TaxSum") from INV4 T2 where T0."DocEntry" = T2."DocEntry" and T2."staType"='-100' and "LineNum"=T1."LineNum") AS "CGST Amount",
-(select sum(T2."TaxSum") from INV4 T2 where T0."DocEntry" = T2."DocEntry" and T2."staType"='-110' and "LineNum"=T1."LineNum") AS "SGST Amount",
-(select sum(T2."TaxSum") from INV4 T2 where T0."DocEntry" = T2."DocEntry" and T2."staType"='-120' and "LineNum"=T1."LineNum") AS "IGST Amount",
-T1."VatSum",T0."DocTotal","LineTotal" 
-,T4."U_FAssem", T4."U_FinalSpec", T4."U_Instruments", T4."U_ItemType", T4."U_MatType", T4."U_Model", T4."U_Sizes"
-FROM OINV T0 
-INNER JOIN INV1 T1 ON T0."DocEntry" = T1."DocEntry" 
-INNER JOIN INV12 T3 ON T0."DocEntry" = T3."DocEntry" 
-left join OITM T4 on T4."ItemCode"=T1."ItemCode" 
-WHERE T0."DocType"='I' and T0."CANCELED"='N' 
-and T0."DocDate">=DateF
-and T0."DocDate"<=DateT
-group by T0."DocNum",T0."DocEntry",T0."DocDate",T0."CardCode",T0."CardName",T3."BpGSTN",T0."U_CustPoNo",T1."HsnEntry",
-T1."SacEntry",T1."OcrCode","Quantity",T0."U_OrderType",T1."VatSum",T0."DocTotal","LineNum","LineTotal",
-T1."TaxCode",t1."ItemCode" ,t1."Dscription",t4."ItmsGrpCod",t4."U_MatType" ,T4."U_FAssem", T4."U_FinalSpec", T4."U_Instruments", T4."U_ItemType", T4."U_MatType", T4."U_Model", T4."U_Sizes"
+LEFT JOIN KNA1 kna1 
+    ON vbak.KUNNR = kna1.KUNNR
 
-union all 
+LEFT JOIN MAKT mara 
+    ON vbap.MATNR = mara.MATNR
 
-SELECT DISTINCT T0."DocNum" as "INV No",T0."U_OrderType"as "OrderType",T0."DocEntry",T0."DocDate" as "InvoiceDate",
-T0."CardCode",T0."CardName",(select "OcrName" from oocr where "OcrCode" = t1."OcrCode" ) as "Branch",
-(SELECT "GroupName" FROM OCRG a inner join ocrd b on a."GroupCode"=b."GroupCode" where T0."CardCode" = b."CardCode")as "BPGroupName",
-T3."BpGSTN",T0."U_CustPoNo",T1."ItemCode",T1."Dscription","Quantity",
-(select "ItmsGrpNam" from oitb where "ItmsGrpCod" = t4."ItmsGrpCod") "ItemGroup Name",t4."U_MatType" "Material Type",
-(select "ChapterID" from OCHP where "AbsEntry"="HsnEntry") "HSN",
-(select "ServCode" from OSAC where "AbsEntry"="SacEntry") "SAC",
-"LineNum",(T1."LineTotal")*-1 as "BaseSum",(select "Rate" from OSTC a where T1."TaxCode" = a."Code") "Tax Rate",
-(select sum(T2."TaxSum") from RIN4 T2 where T0."DocEntry" = T2."DocEntry" and T2."staType"='-100' and "LineNum"=T1."LineNum")*-1 AS "CGST Amount",
-(select sum(T2."TaxSum") from RIN4 T2 where T0."DocEntry" = T2."DocEntry" and T2."staType"='-110' and "LineNum"=T1."LineNum")*-1 AS "SGST Amount",
-(select sum(T2."TaxSum") from RIN4 T2 where T0."DocEntry" = T2."DocEntry" and T2."staType"='-120' and "LineNum"=T1."LineNum")*-1 AS "IGST Amount",
-T1."VatSum"*-1,T0."DocTotal"*-1,"LineTotal"*-1 
-,T4."U_FAssem", T4."U_FinalSpec", T4."U_Instruments", T4."U_ItemType", T4."U_MatType", T4."U_Model", T4."U_Sizes"
+WHERE vbak.ERDAT >= '2023-01-01'
+    AND vbak.VKORG = '1000'   -- Example Sales Org
 
-
-FROM ORIN T0 
-INNER JOIN RIN1 T1 ON T0."DocEntry" = T1."DocEntry" 
-INNER JOIN RIN12 T3 ON T0."DocEntry" = T3."DocEntry" 
-left join OITM T4 on T4."ItemCode"=T1."ItemCode" 
-WHERE T0."DocType"='I' and T0."CANCELED"='N' 
-and T0."DocDate">=DateF
-and T0."DocDate"<=DateT
-group by T0."DocNum",T0."DocEntry",T0."DocDate",T0."CardCode",T0."CardName",T3."BpGSTN",T0."U_CustPoNo",T0."U_OrderType",
-T1."HsnEntry",T1."SacEntry",T1."OcrCode","Quantity",T1."VatSum",T0."DocTotal","LineNum","LineTotal",T1."TaxCode",t1."ItemCode" ,
-t1."Dscription",t4."ItmsGrpCod",t4."U_MatType" 
-,T4."U_FAssem", T4."U_FinalSpec", T4."U_Instruments", T4."U_ItemType", T4."U_MatType", T4."U_Model", T4."U_Sizes"
-
-)as aa 
-group by "INV No","InvoiceDate","OrderType","CardCode","CardName","BPGroupName","ItemCode","Dscription",
-"Quantity","HSN","Material Type","Branch","ItemGroup Name","U_Model", "U_Sizes"
+ORDER BY vbak.ERDAT DESC;
